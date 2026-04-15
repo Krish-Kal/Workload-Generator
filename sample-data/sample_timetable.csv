@@ -1,0 +1,11 @@
+Class Name,Subject,Teacher Name,Day,Time Slot,Department
+CSE-A,Data Structures,John Doe,Monday,09-10,CSE
+CSE-A,Algorithms,John Doe,Monday,10-11,CSE
+CSE-B,Data Structures,John Doe,Monday,10-11,CSE
+CSE-A,Operating Systems,Jane Smith,Tuesday,11-12,CSE
+CSE-B,Operating Systems,Jane Smith,Wednesday,11-12,CSE
+ECE-A,Circuits,Emily Clark,Thursday,09-10,ECE
+ECE-A,Signals,Emily Clark,Friday,10-11,ECE
+ME-A,Thermodynamics,Alan Turing,Monday,12-13,ME
+ME-A,Mechanics,Alan Turing,Tuesday,12-13,ME
+ME-B,Mechanics,Alan Turing,Wednesday,12-13,ME
