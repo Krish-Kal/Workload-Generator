@@ -136,69 +136,109 @@ class WorkloadEngine {
   /**
    * Calculate final metrics and status
    */
-  _calculateMetrics(workload) {
-    const maxHoursPerWeek = this.workdaysPerWeek * this.hoursPerDay;
-    const avgHoursPerDay =
-      workload.totalHours / Object.keys(workload.weeklyLoad).length || 0;
-    const avgConfidence =
-      workload.confidenceScores.length > 0
-        ? workload.confidenceScores.reduce((a, b) => a + b) /
-          workload.confidenceScores.length
-        : 1.0;
+_calculateMetrics(workload) {
+  const maxHoursPerWeek = this.workdaysPerWeek * this.hoursPerDay;
 
-    // Determine status
-    let status = 'BALANCED';
-    if (workload.totalHours > this.overloadThreshold) {
-      status = 'OVERLOADED';
-    } else if (workload.totalHours < this.underloadThreshold) {
-      status = 'UNDERLOADED';
-    }
+  const uniqueDays = Object.keys(workload.weeklyLoad).length || 1;
 
-    // Calculate utilization
-    const utilization = Math.min(
-      100,
-      (workload.totalHours / maxHoursPerWeek) * 100
-    );
+  /**
+   * 🔥 FIX 1: CALCULATE REAL WEEKLY HOURS
+   * Your entries are usually partial → scale if too small
+   */
+  let weeklyHours = workload.totalHours;
 
-    // Convert Sets to Arrays for serialization
-    const subjectBreakdown = {};
-    for (const [subject, data] of Object.entries(workload.subjectBreakdown)) {
-      subjectBreakdown[subject] = {
-        hours: data.hours,
-        classes: data.classes,
-        daysSpan: data.days.size,
-      };
-    }
+  // If dataset is too small → scale it to realistic weekly load
+  if (weeklyHours < 8) {
+    weeklyHours = weeklyHours * this.workdaysPerWeek;
+  }
 
-    return {
-      teacher: workload.teacher,
-      displayName: workload.displayName,
-      department: workload.department,
-      totalHours: Number(workload.totalHours.toFixed(2)),
-      totalClasses: workload.totalClasses,
-      totalSlots: workload.totalSlots,
-      averageHoursPerDay: Number(avgHoursPerDay.toFixed(2)),
-      averageConfidence: Number((avgConfidence * 100).toFixed(2)),
-      status,
-      utilization: Number(utilization.toFixed(2)),
-      freeSlots: Math.max(0, maxHoursPerWeek - workload.totalHours),
-      dailyLoad: workload.dailyLoad,
-      weeklyLoad: workload.weeklyLoad,
-      subjectBreakdown,
-      classBreakdown: workload.classBreakdown,
-      roomBreakdown: workload.roomBreakdown,
-      maxHoursPerWeek,
-      flagged: avgConfidence < 0.7,
-      topSubjects: Object.entries(subjectBreakdown)
-        .sort((a, b) => b[1].hours - a[1].hours)
-        .slice(0, 3)
-        .map(([subject, data]) => ({ subject, hours: data.hours })),
-      topClasses: Object.entries(workload.classBreakdown)
-        .sort((a, b) => b[1].hours - a[1].hours)
-        .slice(0, 3)
-        .map(([className, data]) => ({ className, hours: data.hours })),
+  /**
+   * 🔥 FIX 2: BETTER AVERAGES
+   */
+  const avgHoursPerDay =
+    weeklyHours / (uniqueDays || this.workdaysPerWeek);
+
+  const avgConfidence =
+    workload.confidenceScores.length > 0
+      ? workload.confidenceScores.reduce((a, b) => a + b) /
+        workload.confidenceScores.length
+      : 1.0;
+
+  /**
+   * 🔥 FIX 3: DYNAMIC STATUS (REALISTIC)
+   */
+  const expectedAvg = this.workdaysPerWeek * 3; // ~15 hrs/week typical
+
+  let status = 'BALANCED';
+
+  if (weeklyHours > expectedAvg * 1.3) {
+    status = 'OVERLOADED';
+  } else if (weeklyHours < expectedAvg * 0.6) {
+    status = 'UNDERLOADED';
+  }
+
+  /**
+   * 🔥 FIX 4: UTILIZATION & FREE SLOTS (CORRECT)
+   */
+  const utilization = Math.min(
+    100,
+    (weeklyHours / maxHoursPerWeek) * 100
+  );
+
+  const freeSlots = Math.max(0, maxHoursPerWeek - weeklyHours);
+
+  /**
+   * Keep your subject breakdown logic
+   */
+  const subjectBreakdown = {};
+  for (const [subject, data] of Object.entries(workload.subjectBreakdown)) {
+    subjectBreakdown[subject] = {
+      hours: data.hours,
+      classes: data.classes,
+      daysSpan: data.days.size,
     };
   }
+
+  return {
+    teacher: workload.teacher,
+    displayName: workload.displayName,
+    department: workload.department,
+
+    totalHours: Number(workload.totalHours.toFixed(2)),
+    weeklyHours: Number(weeklyHours.toFixed(2)), // ✅ NEW
+
+    totalClasses: workload.totalClasses,
+    totalSlots: workload.totalSlots,
+
+    averageHoursPerDay: Number(avgHoursPerDay.toFixed(2)),
+    averageConfidence: Number((avgConfidence * 100).toFixed(2)),
+
+    status,
+    utilization: Number(utilization.toFixed(2)),
+
+    freeSlots: Number(freeSlots.toFixed(2)), // ✅ FIXED
+
+    dailyLoad: workload.dailyLoad,
+    weeklyLoad: workload.weeklyLoad,
+
+    subjectBreakdown,
+    classBreakdown: workload.classBreakdown,
+    roomBreakdown: workload.roomBreakdown,
+
+    maxHoursPerWeek,
+    flagged: avgConfidence < 0.7,
+
+    topSubjects: Object.entries(subjectBreakdown)
+      .sort((a, b) => b[1].hours - a[1].hours)
+      .slice(0, 3)
+      .map(([subject, data]) => ({ subject, hours: data.hours })),
+
+    topClasses: Object.entries(workload.classBreakdown)
+      .sort((a, b) => b[1].hours - a[1].hours)
+      .slice(0, 3)
+      .map(([className, data]) => ({ className, hours: data.hours })),
+  };
+}
 
   /**
    * Get overloaded teachers

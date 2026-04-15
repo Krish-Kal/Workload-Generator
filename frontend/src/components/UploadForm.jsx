@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { uploadTimetables, processTimetables, fetchQualityReport } from '../services/api.js';
+import {
+  uploadTimetables,
+  processTimetables,
+  fetchWorkloadAnalytics,
+  fetchConflictAnalysis,
+  fetchSuggestions,
+  fetchQualityReport,
+} from '../services/api.js';
 
 const UploadForm = ({ onUploadSuccess }) => {
   const [files, setFiles] = useState([]);
@@ -8,7 +15,16 @@ const UploadForm = ({ onUploadSuccess }) => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [uploadResult, setUploadResult] = useState(null);
-  const [qualityReport, setQualityReport] = useState(null);
+ const [qualityReport, setQualityReport] = useState({
+  qualityGrade: '-',
+  averageConfidence: 0,
+  confidenceDistribution: {
+    excellent: 0,
+    good: 0,
+    acceptable: 0,
+    needsReview: 0
+  }
+});
 
   const handleFileChange = (e) => {
     setFiles(Array.from(e.target.files || []));
@@ -29,14 +45,17 @@ const UploadForm = ({ onUploadSuccess }) => {
     setUploadResult(null);
 
     try {
+      console.log(`[DEBUG] Uploading ${files.length} file(s)...`);
       // Step 1: Upload and parse files
       const res = await uploadTimetables(files);
+      console.log(`[DEBUG] Upload response - Total: ${res.summary.totalRows}, Valid: ${res.summary.totalValid}, Invalid: ${res.summary.totalInvalid}`);
       
       setUploadResult(res);
       setMessage(`✓ Parsed ${res.summary.totalRows} rows`);
       
       // Check if all data is high quality
       if (res.summary.totalInvalid === 0) {
+        console.log(`[DEBUG] All rows valid - auto-processing...`);
         // Auto-process if all rows are valid
         await processData(res);
       } else {
@@ -49,6 +68,7 @@ const UploadForm = ({ onUploadSuccess }) => {
         err?.response?.data?.error ||
         err.message ||
         'Failed to upload files.';
+      console.error(`[ERROR] Upload failed: ${msg}`, err);
       setError(msg);
     } finally {
       setIsUploading(false);
@@ -71,20 +91,39 @@ const UploadForm = ({ onUploadSuccess }) => {
         return;
       }
 
+      console.log(`[DEBUG] Processing ${allEntries.length} entries...`);
+
       // Step 2: Process normalized entries
       const processRes = await processTimetables(res.batchId, allEntries);
-      
-      // Fetch quality report
-      const quality = await fetchQualityReport();
+      console.log(`[DEBUG] Stored: ${processRes.stored}, Flagged: ${processRes.flagged}`);
+
+      // Step 3: Fetch ALL fresh analytics from backend
+      console.log(`[DEBUG] Fetching fresh analytics...`);
+      const [workload, conflicts, suggestions, quality] = await Promise.all([
+        fetchWorkloadAnalytics(),
+        fetchConflictAnalysis(),
+        fetchSuggestions(),
+        fetchQualityReport(),
+      ]);
+      console.log(`[DEBUG] Analytics fetched - Workloads: ${workload.workloads?.length || 0}`);
+
       setQualityReport(quality);
 
       setMessage(
         `✓ Success! Stored ${processRes.stored} entries. Quality Grade: ${quality.qualityGrade}`
       );
+
+      // Signal dashboard to refresh
+      sessionStorage.setItem('timetableUploaded', 'true');
       
-      if (onUploadSuccess) onUploadSuccess();
+      // Trigger dashboard refresh via callback
+      if (onUploadSuccess) {
+        console.log(`[DEBUG] Calling onUploadSuccess callback...`);
+        onUploadSuccess();
+      }
     } catch (err) {
       const msg = err?.response?.data?.error || err.message || 'Failed to process data.';
+      console.error(`[ERROR] Process failed: ${msg}`, err);
       setError(msg);
     } finally {
       setIsProcessing(false);
@@ -251,7 +290,7 @@ const UploadForm = ({ onUploadSuccess }) => {
           <div className="bg-slate-900 rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Excellent (90-100%)</span>
-              <span className="text-emerald-400 font-semibold">{qualityReport.confidenceDistribution.excellent}</span>
+              <span className="text-emerald-400 font-semibold">{qualityReport?.confidenceDistribution?.excellent ?? 0}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Good (80-90%)</span>

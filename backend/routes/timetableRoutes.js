@@ -8,7 +8,6 @@ import {
   getWorkloadAnalytics,
   getConflictAnalysis,
   getSuggestions,
-  getBatchAuditTrail,
   getQualityReport,
   exportData,
 } from '../controllers/timetableController.js';
@@ -45,7 +44,6 @@ router.get('/analytics/suggestions', getSuggestions);
 router.get('/analytics/quality', getQualityReport);
 
 // Get audit trail for a batch
-router.get('/audit/:batchId', getBatchAuditTrail);
 
 /**
  * Export Routes

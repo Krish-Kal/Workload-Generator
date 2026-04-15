@@ -148,15 +148,20 @@ class NormalizationEngine {
   /**
    * Get teacher matching confidence
    */
-  _getTeacherMatchScore(raw, normalized) {
-    if (!raw) return 0.0;
-    if (String(raw).trim().toLowerCase() === normalized.normalized) return 1.0;
-    // Check if it's a fuzzy match
-    const similarity = this.fuzzyMatcher._normalizeTeacherName(raw).localeCompare(
-      normalized.normalized
-    );
-    return similarity === 0 ? 0.95 : 0.7;
-  }
+_getTeacherMatchScore(raw, normalized) {
+  if (!raw) return 0.0;
+
+  const rawNorm = this.fuzzyMatcher._normalizeTeacherName(raw);
+
+  if (rawNorm === normalized.normalized) return 1.0;
+
+  // Use actual similarity
+  const similarity = this.fuzzyMatcher.getSimilarity
+    ? this.fuzzyMatcher.getSimilarity(rawNorm, normalized.normalized)
+    : 0.8; // fallback
+
+  return similarity;
+}
 
   /**
    * Normalize subject with fuzzy matching

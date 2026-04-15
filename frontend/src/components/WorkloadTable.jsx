@@ -23,9 +23,9 @@ const WorkloadTable = ({ teachers }) => {
           </tr>
         </thead>
         <tbody>
-          {teachers.map((t) => (
+          {teachers.map((t, idx) => (
             <tr
-              key={t.teacher}
+              key={`${t.teacher}-${t.totalHours}-${idx}`}
               className="border-b border-slate-900 last:border-b-0 hover:bg-slate-900/40"
             >
               <td className="py-2 pr-4">{t.teacher}</td>

@@ -49,7 +49,23 @@ const Dashboard = () => {
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    
+    // Listen for fresh data upload signal
+    const handleStorageChange = (e) => {
+      if (e.key === 'timetableUploaded' && e.newValue === 'true') {
+        console.log('[DEBUG] Fresh upload detected - triggering dashboard refresh...');
+        loadData();
+        // Clear the flag
+        sessionStorage.removeItem('timetableUploaded');
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
