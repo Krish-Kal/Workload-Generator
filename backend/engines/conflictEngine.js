@@ -279,14 +279,15 @@ class ConflictEngine {
   /**
    * Generate unique key for conflict
    */
-  _getConflictKey(conflict) {
-    if (conflict.type === 'TIME') {
-      return `TIME|${conflict.teacher}|${conflict.day}|${conflict.class1}|${conflict.class2}`;
-    } else if (conflict.type === 'RESOURCE') {
-      return `RESOURCE|${conflict.room}|${conflict.day}|${conflict.class1}|${conflict.class2}`;
-    }
-    return `${conflict.type}|${conflict.subject}|${conflict.day}|${conflict.class1}|${conflict.class2}`;
+_getConflictKey(conflict) {
+  if (conflict.type === 'TIME') {
+    return `TIME|${conflict.teacher}|${conflict.day}|${conflict.startTime1}-${conflict.endTime1}|${conflict.startTime2}-${conflict.endTime2}`;
+  } else if (conflict.type === 'RESOURCE') {
+    return `RESOURCE|${conflict.room}|${conflict.day}|${conflict.startTime1}-${conflict.endTime1}`;
   }
+
+  return `${conflict.type}|${conflict.subject}|${conflict.day}|${conflict.startTime1}`;
+}
 
   /**
    * Get conflicts by teacher
@@ -352,7 +353,7 @@ class ConflictEngine {
     return {
       ...summary,
       affectedTeachers: summary.affectedTeachers.size,
-      affectedRooms: summary.affectedRooms.size,
+      affectedRooms: summary.z.size,
       affectedClasses: summary.affectedClasses.size,
     };
   }

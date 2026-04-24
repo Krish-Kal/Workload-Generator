@@ -15,9 +15,12 @@ const UploadForm = ({ onUploadSuccess }) => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [uploadResult, setUploadResult] = useState(null);
- const [qualityReport, setQualityReport] = useState({
+  const [qualityReport, setQualityReport] = useState({
   qualityGrade: '-',
   averageConfidence: 0,
+  completenessScore: 0,
+  duplicateEntries: 0,
+  flaggedEntries: 0,
   confidenceDistribution: {
     excellent: 0,
     good: 0,
@@ -30,6 +33,18 @@ const UploadForm = ({ onUploadSuccess }) => {
     setFiles(Array.from(e.target.files || []));
     setError('');
     setMessage('');
+  };
+
+  const formatProcessingTime = (processingTimeMs) => {
+    if (!processingTimeMs && processingTimeMs !== 0) {
+      return '-';
+    }
+
+    if (processingTimeMs < 1000) {
+      return `${processingTimeMs} ms`;
+    }
+
+    return `${(processingTimeMs / 1000).toFixed(2)} s`;
   };
 
   const handleSubmit = async (e) => {
@@ -195,7 +210,7 @@ const UploadForm = ({ onUploadSuccess }) => {
             {isUploading ? '⏳ Uploading…' : '🚀 Upload & Parse'}
           </button>
           <a
-            href="http://localhost:5000/sample-data/sample_timetable.csv"
+            href="http://localhost:5001/sample-data/sample_timetable.csv"
             target="_blank"
             rel="noreferrer"
             className="text-xs text-blue-400 hover:text-blue-300 underline"
@@ -236,7 +251,9 @@ const UploadForm = ({ onUploadSuccess }) => {
             </div>
             <div className="bg-slate-900 rounded-lg p-4">
               <div className="text-sm text-slate-400 mb-1">Processing Time</div>
-              <div className="text-2xl font-bold text-blue-400">{uploadResult.processingTime}ms</div>
+              <div className="text-2xl font-bold text-blue-400">
+                {formatProcessingTime(uploadResult.processingTimeMs)}
+              </div>
             </div>
           </div>
 
@@ -304,10 +321,18 @@ const UploadForm = ({ onUploadSuccess }) => {
               <span className="text-slate-400">Needs Review ({'<'}70%)</span>
               <span className="text-red-400 font-semibold">{qualityReport.confidenceDistribution.needsReview}</span>
             </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Completeness</span>
+              <span className="text-blue-400 font-semibold">{qualityReport.completenessScore}%</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Duplicate Entries</span>
+              <span className="text-yellow-400 font-semibold">{qualityReport.duplicateEntries}</span>
+            </div>
           </div>
 
           <div className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-700/60 rounded-md px-3 py-2">
-            ✓ All data processed successfully and stored in the database!
+            ✓ Quality is based on confidence, required-field completeness, and duplicate detection.
           </div>
         </div>
       )}
@@ -316,4 +341,3 @@ const UploadForm = ({ onUploadSuccess }) => {
 };
 
 export default UploadForm;
-

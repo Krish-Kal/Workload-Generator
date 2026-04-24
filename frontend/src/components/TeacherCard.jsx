@@ -1,13 +1,19 @@
 import React from 'react';
 
 const statusColors = {
-  Overloaded: 'bg-red-500/20 border-red-500/60 text-red-300',
-  Balanced: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300',
-  Underloaded: 'bg-amber-500/20 border-amber-500/60 text-amber-200',
+  OVERLOADED: 'bg-red-500/20 border-red-500/60 text-red-300',
+  BALANCED: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300',
+  UNDERLOADED: 'bg-amber-500/20 border-amber-500/60 text-amber-200',
 };
 
 const TeacherCard = ({ teacher }) => {
-  const colorClass = statusColors[teacher.status] || statusColors.Balanced;
+  const colorClass = statusColors[teacher.status] || statusColors.BALANCED;
+  const statusLabel =
+    teacher.status === 'OVERLOADED'
+      ? 'Overloaded'
+      : teacher.status === 'UNDERLOADED'
+      ? 'Underloaded'
+      : 'Balanced';
 
   return (
     <div className="card p-4 flex flex-col gap-3 hover:-translate-y-0.5 hover:border-slate-600 transition-transform">
@@ -23,7 +29,7 @@ const TeacherCard = ({ teacher }) => {
         <span
           className={`px-2 py-1 rounded-full text-[11px] border ${colorClass}`}
         >
-          {teacher.status}
+          {statusLabel}
         </span>
       </div>
 
@@ -65,4 +71,3 @@ const TeacherCard = ({ teacher }) => {
 };
 
 export default TeacherCard;
-

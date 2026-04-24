@@ -1,113 +1,113 @@
-/**
- * Workload Calculation Engine (Enterprise Edition)
- * Computes detailed workload analytics per teacher
- * Includes daily/weekly breakdowns and advanced metrics
- */
-
 class WorkloadEngine {
-  constructor(options = {}) {
-    this.workdaysPerWeek = options.workdaysPerWeek || 5;
-    this.hoursPerDay = options.hoursPerDay || 8;
-    this.overloadThreshold = options.overloadThreshold || 20; // hours/week
-    this.underloadThreshold = options.underloadThreshold || 10; // hours/week
-  }
+constructor(options = {}) {
+  this.workdaysPerWeek = options.workdaysPerWeek || 5;
+  this.hoursPerDay = options.hoursPerDay || 6;
 
-  /**
-   * Calculate comprehensive workload for all teachers
-   */
+  this.overloadThreshold = options.overloadThreshold || 15;
+  this.underloadThreshold = options.underloadThreshold || 10;
+}
+
   calculateWorkload(entries) {
     const workloadMap = new Map();
 
     for (const entry of entries) {
       const teacher = entry.normalizedTeacherName || entry.teacherName;
+
       if (!workloadMap.has(teacher)) {
-        workloadMap.set(teacher, this._initializeTeacherWorkload(teacher, entry));
+        workloadMap.set(teacher, this._initializeTeacherWorkload(entry));
       }
 
-      const w = workloadMap.get(teacher);
-      this._addEntryToWorkload(w, entry);
+      this._addEntryToWorkload(workloadMap.get(teacher), entry);
     }
 
-    // Calculate additional metrics and status
     const workloads = Array.from(workloadMap.values()).map((w) =>
       this._calculateMetrics(w)
     );
 
-    return workloads.sort((a, b) => b.totalHours - a.totalHours);
+    return this._applyStatusAnalysis(workloads);
   }
 
-  /**
-   * Initialize teacher workload object
-   */
-  _initializeTeacherWorkload(teacher, entry) {
+  _initializeTeacherWorkload(entry) {
     return {
-      teacher,
+      teacher: entry.teacherName,
       displayName: entry.teacherName,
       department: entry.department || 'General',
+
+      uniqueSlots: new Set(),
+      uniqueClasses: new Set(),
+
       totalHours: 0,
       totalClasses: 0,
       totalSlots: 0,
+
       dailyLoad: {},
-      weeklyLoad: {},
       subjectBreakdown: {},
       classBreakdown: {},
-      roomBreakdown: {},
       confidenceScores: [],
       entries: [],
     };
   }
 
-  /**
-   * Add an entry to a teacher's workload
-   */
+  _parseTime(entry) {
+    if (entry.timeSlot) {
+      const [start, end] = entry.timeSlot.split('-');
+      return {
+        startTime: start,
+        endTime: end,
+      };
+    }
+
+    return {
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+    };
+  }
+
   _addEntryToWorkload(workload, entry) {
-    const hours = entry.durationHours || 1;
+    const { startTime, endTime } = this._parseTime(entry);
     const day = entry.day || 'UNKNOWN';
 
-    // Total aggregates
-    workload.totalHours += hours;
-    workload.totalClasses += 1;
-    workload.totalSlots += 1;
+    const slotKey = `${day}-${startTime}-${endTime}`;
+
+    if (!workload.uniqueSlots.has(slotKey)) {
+      workload.uniqueSlots.add(slotKey);
+
+      // ✅ FIX APPLIED HERE
+      workload.totalHours = workload.uniqueSlots.size;
+
+      workload.totalSlots += 1;
+    }
+
+    workload.uniqueClasses.add(entry.className);
+    workload.totalClasses = workload.uniqueClasses.size;
+
     workload.confidenceScores.push(entry.confidenceScore || 1.0);
 
-    // Daily breakdown
     if (!workload.dailyLoad[day]) {
       workload.dailyLoad[day] = {
         slots: 0,
         hours: 0,
-        classes: [],
+        classes: new Set(),
       };
     }
+
     workload.dailyLoad[day].slots += 1;
-    workload.dailyLoad[day].hours += hours;
-    workload.dailyLoad[day].classes.push(entry.className);
+    workload.dailyLoad[day].hours += 1;
+    workload.dailyLoad[day].classes.add(entry.className);
 
-    // Weekly load (sum by day first then aggregate weeks)
-    if (!workload.weeklyLoad[day]) {
-      workload.weeklyLoad[day] = {
-        slots: 0,
-        hours: 0,
-      };
-    }
-    workload.weeklyLoad[day].slots += 1;
-    workload.weeklyLoad[day].hours += hours;
-
-    // Subject breakdown
     const subject = entry.subject || 'General';
     if (!workload.subjectBreakdown[subject]) {
       workload.subjectBreakdown[subject] = {
         hours: 0,
-        classes: 0,
+        classes: new Set(),
         days: new Set(),
       };
     }
-    workload.subjectBreakdown[subject].hours += hours;
-    workload.subjectBreakdown[subject].classes += 1;
-    if (entry.day) {
-      workload.subjectBreakdown[subject].days.add(entry.day);
-    }
 
-    // Class breakdown
+    workload.subjectBreakdown[subject].hours += 1;
+    workload.subjectBreakdown[subject].classes.add(entry.className);
+    workload.subjectBreakdown[subject].days.add(day);
+
     const className = entry.className || 'UNKNOWN';
     if (!workload.classBreakdown[className]) {
       workload.classBreakdown[className] = {
@@ -115,238 +115,171 @@ class WorkloadEngine {
         slots: 0,
       };
     }
-    workload.classBreakdown[className].hours += hours;
-    workload.classBreakdown[className].slots += 1;
 
-    // Room breakdown
-    if (entry.room) {
-      if (!workload.roomBreakdown[entry.room]) {
-        workload.roomBreakdown[entry.room] = {
-          hours: 0,
-          classes: 0,
-        };
-      }
-      workload.roomBreakdown[entry.room].hours += hours;
-      workload.roomBreakdown[entry.room].classes += 1;
-    }
+    workload.classBreakdown[className].hours += 1;
+    workload.classBreakdown[className].slots += 1;
 
     workload.entries.push(entry);
   }
 
-  /**
-   * Calculate final metrics and status
-   */
-_calculateMetrics(workload) {
-  const maxHoursPerWeek = this.workdaysPerWeek * this.hoursPerDay;
+  _calculateMetrics(workload) {
+    const maxHoursPerWeek =
+      this.workdaysPerWeek * this.hoursPerDay;
 
-  const uniqueDays = Object.keys(workload.weeklyLoad).length || 1;
+    const weeklyHours = workload.totalHours;
 
-  /**
-   * 🔥 FIX 1: CALCULATE REAL WEEKLY HOURS
-   * Your entries are usually partial → scale if too small
-   */
-  let weeklyHours = workload.totalHours;
+    const uniqueDays = Object.keys(workload.dailyLoad).length || 1;
 
-  // If dataset is too small → scale it to realistic weekly load
-  if (weeklyHours < 8) {
-    weeklyHours = weeklyHours * this.workdaysPerWeek;
-  }
+    const avgHoursPerDay = weeklyHours / uniqueDays;
 
-  /**
-   * 🔥 FIX 2: BETTER AVERAGES
-   */
-  const avgHoursPerDay =
-    weeklyHours / (uniqueDays || this.workdaysPerWeek);
+    const avgConfidence =
+      workload.confidenceScores.length > 0
+        ? workload.confidenceScores.reduce((a, b) => a + b) /
+          workload.confidenceScores.length
+        : 1;
 
-  const avgConfidence =
-    workload.confidenceScores.length > 0
-      ? workload.confidenceScores.reduce((a, b) => a + b) /
-        workload.confidenceScores.length
-      : 1.0;
+    const utilization = Math.min(
+      100,
+      (weeklyHours / maxHoursPerWeek) * 100
+    );
 
-  /**
-   * 🔥 FIX 3: DYNAMIC STATUS (REALISTIC)
-   */
-  const expectedAvg = this.workdaysPerWeek * 3; // ~15 hrs/week typical
+    const freeSlots = Math.max(0, maxHoursPerWeek - weeklyHours);
 
-  let status = 'BALANCED';
+    const subjectBreakdown = {};
+    for (const [subject, data] of Object.entries(
+      workload.subjectBreakdown
+    )) {
+      subjectBreakdown[subject] = {
+        hours: data.hours,
+        classes: data.classes.size,
+        daysSpan: data.days.size,
+      };
+    }
 
-  if (weeklyHours > expectedAvg * 1.3) {
-    status = 'OVERLOADED';
-  } else if (weeklyHours < expectedAvg * 0.6) {
-    status = 'UNDERLOADED';
-  }
+    const dailyLoad = {};
+    for (const [day, data] of Object.entries(workload.dailyLoad)) {
+      dailyLoad[day] = {
+        slots: data.slots,
+        hours: data.hours,
+        classes: data.classes.size,
+      };
+    }
 
-  /**
-   * 🔥 FIX 4: UTILIZATION & FREE SLOTS (CORRECT)
-   */
-  const utilization = Math.min(
-    100,
-    (weeklyHours / maxHoursPerWeek) * 100
-  );
+    return {
+      teacher: workload.teacher,
+      displayName: workload.displayName,
+      department: workload.department,
 
-  const freeSlots = Math.max(0, maxHoursPerWeek - weeklyHours);
+      totalHours: weeklyHours,
+      totalClasses: workload.totalClasses,
+      totalSlots: workload.totalSlots,
 
-  /**
-   * Keep your subject breakdown logic
-   */
-  const subjectBreakdown = {};
-  for (const [subject, data] of Object.entries(workload.subjectBreakdown)) {
-    subjectBreakdown[subject] = {
-      hours: data.hours,
-      classes: data.classes,
-      daysSpan: data.days.size,
+      averageHoursPerDay: Number(avgHoursPerDay.toFixed(2)),
+      averageConfidence: Number((avgConfidence * 100).toFixed(2)),
+
+      status: 'BALANCED',
+      utilization: Number(utilization.toFixed(2)),
+      freeSlots,
+
+      dailyLoad,
+      subjectBreakdown,
+      classBreakdown: workload.classBreakdown,
+
+      maxHoursPerWeek,
     };
   }
 
-  return {
-    teacher: workload.teacher,
-    displayName: workload.displayName,
-    department: workload.department,
+  _applyStatusAnalysis(workloads) {
+    if (workloads.length === 0) {
+      return workloads;
+    }
 
-    totalHours: Number(workload.totalHours.toFixed(2)),
-    weeklyHours: Number(weeklyHours.toFixed(2)), // ✅ NEW
+    const benchmarkHours = this._calculateMedian(
+      workloads.map((workload) => workload.totalHours || 0)
+    );
 
-    totalClasses: workload.totalClasses,
-    totalSlots: workload.totalSlots,
+    return workloads.map((workload) => {
+      const utilizationRatio =
+        workload.maxHoursPerWeek > 0
+          ? workload.totalHours / workload.maxHoursPerWeek
+          : 0;
+      const balancedWindow = Math.max(2, Math.round(benchmarkHours * 0.2));
+      const lowerBound = Math.max(0, benchmarkHours - balancedWindow);
+      const upperBound = Math.min(
+        workload.maxHoursPerWeek,
+        benchmarkHours + balancedWindow
+      );
 
-    averageHoursPerDay: Number(avgHoursPerDay.toFixed(2)),
-    averageConfidence: Number((avgConfidence * 100).toFixed(2)),
+      let status = 'BALANCED';
+      let analysisReason = `Within the balanced range of ${lowerBound}-${upperBound} hours based on the ${benchmarkHours}h weekly benchmark.`;
 
-    status,
-    utilization: Number(utilization.toFixed(2)),
-
-    freeSlots: Number(freeSlots.toFixed(2)), // ✅ FIXED
-
-    dailyLoad: workload.dailyLoad,
-    weeklyLoad: workload.weeklyLoad,
-
-    subjectBreakdown,
-    classBreakdown: workload.classBreakdown,
-    roomBreakdown: workload.roomBreakdown,
-
-    maxHoursPerWeek,
-    flagged: avgConfidence < 0.7,
-
-    topSubjects: Object.entries(subjectBreakdown)
-      .sort((a, b) => b[1].hours - a[1].hours)
-      .slice(0, 3)
-      .map(([subject, data]) => ({ subject, hours: data.hours })),
-
-    topClasses: Object.entries(workload.classBreakdown)
-      .sort((a, b) => b[1].hours - a[1].hours)
-      .slice(0, 3)
-      .map(([className, data]) => ({ className, hours: data.hours })),
-  };
-}
-
-  /**
-   * Get overloaded teachers
-   */
-  getOverloadedTeachers(workloads) {
-    return workloads.filter((w) => w.status === 'OVERLOADED');
-  }
-
-  /**
-   * Get underloaded teachers
-   */
-  getUnderutilizedTeachers(workloads) {
-    return workloads.filter((w) => w.status === 'UNDERLOADED');
-  }
-
-  /**
-   * Get department-wise workload summary
-   */
-  getDepartmentSummary(workloads) {
-    const deptMap = new Map();
-
-    for (const workload of workloads) {
-      const dept = workload.department;
-      if (!deptMap.has(dept)) {
-        deptMap.set(dept, {
-          department: dept,
-          teachers: 0,
-          totalHours: 0,
-          averageHours: 0,
-          overloaded: 0,
-          underloaded: 0,
-          balanced: 0,
-        });
+      if (utilizationRatio >= 0.85 || workload.totalHours > upperBound) {
+        status = 'OVERLOADED';
+        analysisReason =
+          utilizationRatio >= 0.85
+            ? `Uses ${Math.round(utilizationRatio * 100)}% of weekly capacity, which is above the overload limit.`
+            : `${workload.totalHours}h is above the balanced upper limit of ${upperBound}h.`;
+      } else if (utilizationRatio <= 0.15 || workload.totalHours < lowerBound) {
+        status = 'UNDERLOADED';
+        analysisReason =
+          utilizationRatio <= 0.15
+            ? `Uses only ${Math.round(utilizationRatio * 100)}% of weekly capacity, which is below the minimum expected load.`
+            : `${workload.totalHours}h is below the balanced lower limit of ${lowerBound}h.`;
       }
 
-      const deptData = deptMap.get(dept);
-      deptData.teachers += 1;
-      deptData.totalHours += workload.totalHours;
-      if (workload.status === 'OVERLOADED') deptData.overloaded += 1;
-      else if (workload.status === 'UNDERLOADED') deptData.underloaded += 1;
-      else deptData.balanced += 1;
-    }
-
-    // Calculate averages
-    const result = [];
-    for (const [, deptData] of deptMap) {
-      deptData.averageHours = Number(
-        (deptData.totalHours / deptData.teachers).toFixed(2)
-      );
-      result.push(deptData);
-    }
-
-    return result.sort((a, b) => b.totalHours - a.totalHours);
+      return {
+        ...workload,
+        status,
+        analysis: {
+          benchmarkHours,
+          balancedWindow,
+          lowerBound,
+          upperBound,
+          utilizationRatio: Number(utilizationRatio.toFixed(2)),
+          reason: analysisReason,
+        },
+      };
+    });
   }
 
-  /**
-   * Generate workload statistics
-   */
+  _calculateMedian(values) {
+    if (values.length === 0) {
+      return 0;
+    }
+
+    const sortedValues = [...values].sort((left, right) => left - right);
+    const middleIndex = Math.floor(sortedValues.length / 2);
+
+    if (sortedValues.length % 2 === 0) {
+      return Number(
+        (
+          (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) /
+          2
+        ).toFixed(2)
+      );
+    }
+
+    return sortedValues[middleIndex];
+  }
+
   getStatistics(workloads) {
-    const hours = workloads.map((w) => w.totalHours);
-    const sorted = [...hours].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
+    const averageHours =
+      workloads.length > 0
+        ? Number(
+            (
+              workloads.reduce((sum, workload) => sum + (workload.totalHours || 0), 0) /
+              workloads.length
+            ).toFixed(2)
+          )
+        : 0;
 
     return {
       totalTeachers: workloads.length,
-      overloaded: workloads.filter((w) => w.status === 'OVERLOADED').length,
-      balanced: workloads.filter((w) => w.status === 'BALANCED').length,
-      underloaded: workloads.filter((w) => w.status === 'UNDERLOADED').length,
-      totalHours: Number(hours.reduce((a, b) => a + b, 0).toFixed(2)),
-      averageHours: Number((hours.reduce((a, b) => a + b, 0) / hours.length).toFixed(2)),
-      medianHours: sorted[mid],
-      minHours: Math.min(...hours),
-      maxHours: Math.max(...hours),
-      standardDeviation: Number(this._calculateStdDev(hours).toFixed(2)),
+      overloaded: workloads.filter(w => w.status === 'OVERLOADED').length,
+      balanced: workloads.filter(w => w.status === 'BALANCED').length,
+      underloaded: workloads.filter(w => w.status === 'UNDERLOADED').length,
+      averageHours,
     };
-  }
-
-  /**
-   * Calculate standard deviation
-   */
-  _calculateStdDev(values) {
-    const avg = values.reduce((a, b) => a + b) / values.length;
-    const squareDiffs = values.map((value) => Math.pow(value - avg, 2));
-    const avgSquareDiff = squareDiffs.reduce((a, b) => a + b) / values.length;
-    return Math.sqrt(avgSquareDiff);
-  }
-
-  /**
-   * Get workload distribution chart data
-   */
-  getDistributionData(workloads) {
-    const ranges = [
-      { range: '0-5 hrs', min: 0, max: 5, count: 0 },
-      { range: '5-10 hrs', min: 5, max: 10, count: 0 },
-      { range: '10-15 hrs', min: 10, max: 15, count: 0 },
-      { range: '15-20 hrs', min: 15, max: 20, count: 0 },
-      { range: '20+ hrs', min: 20, max: 1000, count: 0 },
-    ];
-
-    for (const workload of workloads) {
-      const range = ranges.find(
-        (r) =>
-          workload.totalHours >= r.min && workload.totalHours < r.max
-      );
-      if (range) range.count += 1;
-    }
-
-    return ranges;
   }
 }
 

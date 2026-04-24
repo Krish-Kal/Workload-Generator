@@ -1,5 +1,20 @@
 import React from 'react';
 
+const statusMeta = {
+  OVERLOADED: {
+    label: 'Overloaded',
+    className: 'bg-red-500/20 text-red-300 border border-red-500/40',
+  },
+  BALANCED: {
+    label: 'Balanced',
+    className: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+  },
+  UNDERLOADED: {
+    label: 'Underloaded',
+    className: 'bg-amber-500/20 text-amber-200 border border-amber-500/40',
+  },
+};
+
 const WorkloadTable = ({ teachers }) => {
   if (!teachers.length) {
     return (
@@ -36,9 +51,20 @@ const WorkloadTable = ({ teachers }) => {
               <td className="py-2 pr-4 text-right">{t.totalClasses}</td>
               <td className="py-2 pr-4 text-right">{t.freeSlots}</td>
               <td className="py-2 pr-4">
-                <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-200">
-                  {t.status}
-                </span>
+                <div className="space-y-1">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${
+                      statusMeta[t.status]?.className || 'bg-slate-800 text-slate-200'
+                    }`}
+                  >
+                    {statusMeta[t.status]?.label || t.status}
+                  </span>
+                  {t.analysis?.reason && (
+                    <div className="max-w-xs text-[10px] leading-4 text-slate-500">
+                      {t.analysis.reason}
+                    </div>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -49,4 +75,3 @@ const WorkloadTable = ({ teachers }) => {
 };
 
 export default WorkloadTable;
-

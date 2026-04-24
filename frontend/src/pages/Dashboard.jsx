@@ -16,8 +16,6 @@ const Dashboard = () => {
   const [conflicts, setConflicts] = useState([]);
   const [suggestions, setSuggestions] = useState(null);
   const [qualityReport, setQualityReport] = useState(null);
-  const [search, setSearch] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,10 +24,7 @@ const Dashboard = () => {
     setError('');
     try {
       const [workload, conflictData, suggestionData, quality] = await Promise.all([
-        fetchWorkloadAnalytics({
-          department: departmentFilter || undefined,
-          searchTeacher: search || undefined,
-        }),
+        fetchWorkloadAnalytics(),
         fetchConflictAnalysis(),
         fetchSuggestions(),
         fetchQualityReport(),
@@ -72,14 +67,18 @@ const Dashboard = () => {
   const handleExport = async (format, type = 'workload') => {
     try {
       const res = await exportData(type, format);
-      if (format === 'csv') {
+      if (format !== 'json') {
         const url = window.URL.createObjectURL(res.data);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `${type}_report.csv`);
+        const contentDisposition = res.headers?.['content-disposition'] || '';
+        const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        const fileName = fileNameMatch?.[1] || `${type}_report.${format}`;
+        link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
         link.remove();
+        window.URL.revokeObjectURL(url);
       } else {
         const dataStr =
           'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(res.data, null, 2));
@@ -93,11 +92,6 @@ const Dashboard = () => {
     } catch (err) {
       alert('Failed to export data.');
     }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    loadData();
   };
 
   const teachers = workloadData?.workloads || [];
@@ -131,10 +125,10 @@ const Dashboard = () => {
             📥 JSON
           </button>
           <button
-            onClick={() => handleExport('csv', 'workload')}
+            onClick={() => handleExport('xlsx', 'workload')}
             className="btn-primary text-xs"
           >
-            📥 CSV
+            📥 Excel
           </button>
         </div>
       </div>
@@ -158,44 +152,6 @@ const Dashboard = () => {
           </div>
         </div>
       )}
-
-      {/* Filters */}
-      <form
-        onSubmit={handleSearch}
-        className="card p-4 flex flex-col md:flex-row gap-3 md:items-end"
-      >
-        <div className="flex-1">
-          <label className="block text-[11px] text-slate-400 mb-1">
-            🔍 Search by teacher name
-          </label>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="e.g. Dr. Rao"
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="block text-[11px] text-slate-400 mb-1">
-            🏛️ Filter by department
-          </label>
-          <input
-            type="text"
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value)}
-            placeholder="e.g. CSE"
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <button
-          type="submit"
-          className="btn-primary text-xs md:self-auto"
-          disabled={isLoading}
-        >
-          {isLoading ? '⏳ Loading…' : '🔎 Apply'}
-        </button>
-      </form>
 
       {error && (
         <div className="card p-3 text-xs text-red-300 bg-red-950/40 border border-red-700/60">
@@ -224,7 +180,9 @@ const Dashboard = () => {
           </div>
           <div className="card p-4 bg-slate-900">
             <div className="text-xs text-slate-400">Avg Hours/Week</div>
-            <div className="text-2xl font-bold text-slate-200">{statistics.averageHours}</div>
+            <div className="text-2xl font-bold text-slate-200">
+              {statistics.averageHours ?? 0}
+            </div>
           </div>
         </div>
       )}
@@ -263,33 +221,56 @@ const Dashboard = () => {
                   {suggestions.suggestions.slice(0, 8).map((sug, idx) => (
                     <div
                       key={idx}
-                      className="border border-slate-700 rounded-lg p-2 bg-slate-900/50 text-xs"
+                      className="border border-slate-700 rounded-lg p-3 bg-slate-900/50 text-xs"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
                           <div className="font-semibold text-slate-200">
-                            {sug.type === 'WORKLOAD_DISTRIBUTION'
-                              ? `Transfer: ${sug.fromTeacher} → ${sug.toTeacher}`
-                              : sug.type === 'CONFLICT_RESOLUTION'
-                              ? `Resolve: ${sug.teacher}`
-                              : sug.type}
+                            {sug.title ||
+                              (sug.type === 'WORKLOAD_DISTRIBUTION'
+                                ? `Transfer: ${sug.fromTeacher} → ${sug.toTeacher}`
+                                : sug.type === 'CONFLICT_RESOLUTION'
+                                ? `Resolve: ${sug.teacher}`
+                                : sug.type)}
                           </div>
                           <div className="text-slate-400 mt-1">{sug.reason}</div>
+                          {sug.suggestion && (
+                            <div className="text-slate-300 mt-2">
+                              Action: <span className="text-slate-400">{sug.suggestion}</span>
+                            </div>
+                          )}
                           {sug.impact && (
                             <div className="text-slate-500 mt-1 text-[10px]">
-                              Before/After:{' '}
+                              Impact:{' '}
                               <span className="text-red-400">
                                 {sug.impact.fromTeacherAfter?.toFixed(1)}h
                               </span>
-                              /
+                              {' → '}
                               <span className="text-emerald-400">
                                 {sug.impact.toTeacherAfter?.toFixed(1)}h
                               </span>
                             </div>
                           )}
+                          {sug.estimatedBenefit && (
+                            <div className="text-[10px] text-slate-500 mt-1">
+                              Benefit: {sug.estimatedBenefit}
+                            </div>
+                          )}
+                          {sug.stats && (
+                            <div className="text-[10px] text-slate-500 mt-1">
+                              Avg {sug.stats.averageHours}h | Range {sug.stats.min}-{sug.stats.max}h | Std dev {sug.stats.standardDeviation}h
+                            </div>
+                          )}
                         </div>
-                        <div className="text-yellow-500 font-bold">
-                          P{sug.priority}
+                        <div className="text-right">
+                          <div className="text-yellow-500 font-bold">
+                            P{sug.priority}
+                          </div>
+                          {sug.department && (
+                            <div className="text-[10px] text-slate-500 mt-1">
+                              {sug.department}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -359,7 +340,7 @@ const Dashboard = () => {
       <section className="text-[11px] text-slate-600 bg-slate-950/40 rounded-lg p-3 border border-slate-800">
         <div className="space-y-1">
           <div>
-            <strong>Status Indicators:</strong> 🟢 Green = Balanced (10-20h) | 🔴 Red = Overloaded ({'>'}20h) | 🟡 Yellow = Underloaded ({'<'}10h)
+            <strong>Status Indicators:</strong> Each teacher is compared with the median weekly load, and a balanced band of about +/-20% around that benchmark.
           </div>
           <div>
             <strong>Confidence Scoring:</strong> All entries are scored (0-100%) and flagged if {`<`}70%. Check Data Quality tab for details.
@@ -374,4 +355,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

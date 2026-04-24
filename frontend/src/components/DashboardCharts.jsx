@@ -13,9 +13,9 @@ import {
 } from 'recharts';
 
 const statusColorMap = {
-  Overloaded: '#f97373',
-  Balanced: '#4ade80',
-  Underloaded: '#facc15',
+  OVERLOADED: '#f97373',
+  BALANCED: '#4ade80',
+  UNDERLOADED: '#facc15',
 };
 
 const DashboardCharts = ({ teachers = [] }) => {
@@ -37,11 +37,17 @@ const DashboardCharts = ({ teachers = [] }) => {
       acc[t.status] = (acc[t.status] || 0) + 1;
       return acc;
     },
-    { Overloaded: 0, Balanced: 0, Underloaded: 0 }
+    { OVERLOADED: 0, BALANCED: 0, UNDERLOADED: 0 }
   );
 
   const pieData = Object.keys(statusCounts).map((status) => ({
-    name: status,
+    name:
+      status === 'OVERLOADED'
+        ? 'Overloaded'
+        : status === 'UNDERLOADED'
+        ? 'Underloaded'
+        : 'Balanced',
+    statusKey: status,
     value: statusCounts[status],
   }));
 
@@ -95,7 +101,7 @@ const DashboardCharts = ({ teachers = [] }) => {
                 {pieData.map((entry) => (
                   <Cell
                     key={entry.name}
-                    fill={statusColorMap[entry.name] || '#64748b'}
+                    fill={statusColorMap[entry.statusKey] || '#64748b'}
                   />
                 ))}
               </Pie>
@@ -121,4 +127,3 @@ const DashboardCharts = ({ teachers = [] }) => {
 };
 
 export default DashboardCharts;
-

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -70,7 +70,7 @@ export const fetchBatchAuditTrail = async (batchId) => {
 export const exportData = async (type = 'workload', format = 'json') => {
   const response = await api.get('/timetable/export', {
     params: { type, format },
-    responseType: format === 'csv' ? 'blob' : 'json',
+    responseType: format === 'json' ? 'json' : 'blob',
   });
   return response;
 };
@@ -104,5 +104,4 @@ export const exportWorkload = async (format = 'json') => {
 };
 
 export default api;
-
 
